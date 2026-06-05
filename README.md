@@ -19,8 +19,10 @@ This project provides:
 
 ## Hardware
 - Waveshare ESP32-S3 Touch LCD 4.3B (or pin-compatible setup)
-- OpenHaldex-S3 unit
+- OpenHaldex-S3 unit (LilyGo T2-CAN based)
 - Stable 5V power supply (recommended for car use)
+
+> **Note:** The status LED is wired to and driven by the OpenHaldex-S3 (LilyGo T2-CAN) unit, not the touchscreen board. The LED colour/mode logic should be implemented in the OpenHaldex-S3 firmware.
 
 ## Arduino libraries
 Install in Arduino IDE Library Manager:

@@ -3,7 +3,6 @@
 #include <TAMC_GT911.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include <Adafruit_NeoPixel.h>
 
 // -----------------------------
 // USER SETTINGS
@@ -30,25 +29,6 @@ const char *MODE_NAMES_FALLBACK[] = {
   "60:40", // Button 4 fallback
   "50:50"  // Button 5 fallback
 };
-
-// -----------------------------
-// RGB LED CONFIG
-// Change LED_PIN to whichever free GPIO your LED data line is wired to.
-// LED_COUNT is the number of NeoPixel LEDs in the strip/ring (1 for a single LED).
-// LED_BRIGHTNESS sets the overall LED brightness (0–255; lower = less glare inside the box).
-// -----------------------------
-#define LED_PIN        4
-#define LED_COUNT      1
-#define LED_BRIGHTNESS 180
-
-// Colours for each mode (R, G, B) — tweak to taste.
-// Index matches MODE_NAMES: 0=FWD, 1=90/10 … 5=50/50
-static const uint8_t MODE_LED_R[6] = {  0,   0,  80, 255, 255, 255 };
-static const uint8_t MODE_LED_G[6] = {  0, 160, 255, 200,  80,   0 };
-static const uint8_t MODE_LED_B[6] = {255, 255,   0,   0,   0,   0 };
-// FWD=blue, 90/10=cyan, 80/20=green, 70/30=yellow, 60/40=orange, 50/50=red
-
-Adafruit_NeoPixel led(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 // -----------------------------
 // DISPLAY + TOUCH CONFIG
@@ -377,13 +357,12 @@ void handleWiFiStateChange() {
   }
 
   lastHandledWifiStatus = status;
-
   if (status == WL_CONNECTED) {
     lastApiResult = "Connected, syncing " + String(buttons[selectedButton].label);
     drawApiResult();
     sendModeToHaldex(selectedButton);
     drawApiResult();
-    updateLed();
+    drawApiResult();
   }
 }
 
@@ -442,49 +421,18 @@ void handleTouch() {
     selectedButton = hitButton;
     drawButton(prev);
     drawButton(selectedButton);
-    updateLed();
   }
 
   // Always send when a button is tapped, even if it is already selected.
-  sendModeToHaldex(selectedButton);
-  drawApiResult();
-}
-
-// Sets the LED to the current mode colour.
-// While WiFi is not connected the LED pulses dim white so the user can
-// see the device is alive but not yet linked to the controller.
-static bool lastPulseState = false;
-void updateLed() {
-  if (WiFi.status() == WL_CONNECTED) {
-    lastPulseState = false; // reset so a future disconnect restarts the pulse cleanly
-    led.setPixelColor(0, led.Color(
-      MODE_LED_R[selectedButton],
-      MODE_LED_G[selectedButton],
-      MODE_LED_B[selectedButton]
-    ));
-    led.show();
-  } else {
-    // Slow pulse: bright half of the second, off the other half.
-    // Only call led.show() when the pulse state changes to minimise bus traffic.
-    bool pulse = ((millis() / 500) % 2) == 0;
-    if (pulse != lastPulseState) {
-      lastPulseState = pulse;
-      led.setPixelColor(0, pulse ? led.Color(40, 40, 40) : led.Color(0, 0, 0));
-      led.show();
-    }
+    sendModeToHaldex(selectedButton);
+    drawApiResult();
   }
-}
 
-void setup() {
-  Serial.begin(115200);
-  delay(250);
+  void setup() {
+    Serial.begin(115200);
+    delay(250);
 
-  led.begin();
-  led.setBrightness(LED_BRIGHTNESS);
-  led.clear();
-  led.show();
-
-  pinMode(TFT_BL, OUTPUT);
+    pinMode(TFT_BL, OUTPUT);
   digitalWrite(TFT_BL, HIGH);
 
   if (!gfx->begin()) {
@@ -509,10 +457,5 @@ void loop() {
   drawConnectionStatus();
   handleWiFiStateChange();
   handleTouch();
-  // Drive the connecting-pulse when not yet linked; the pulse guard inside
-  // updateLed() ensures led.show() is only called on state transitions.
-  if (WiFi.status() != WL_CONNECTED) {
-    updateLed();
-  }
   delay(5);
 }
