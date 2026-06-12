@@ -1,9 +1,8 @@
-#include <Arduino_GFX_Library.h>
+﻿#include <Arduino_GFX_Library.h>
 #include <Wire.h>
 #include <TAMC_GT911.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include <Adafruit_NeoPixel.h>
 
 // -----------------------------
 // USER SETTINGS
@@ -30,25 +29,6 @@ const char *MODE_NAMES_FALLBACK[] = {
   "60:40", // Button 4 fallback
   "50:50"  // Button 5 fallback
 };
-
-// -----------------------------
-// RGB LED CONFIG
-// Change LED_PIN to whichever free GPIO your LED data line is wired to.
-// LED_COUNT is the number of NeoPixel LEDs in the strip/ring (1 for a single LED).
-// LED_BRIGHTNESS sets the overall LED brightness (0–255; lower = less glare inside the box).
-// -----------------------------
-#define LED_PIN        4
-#define LED_COUNT      1
-#define LED_BRIGHTNESS 180
-
-// Colours for each mode (R, G, B) — tweak to taste.
-// Index matches MODE_NAMES: 0=FWD, 1=90/10 … 5=50/50
-static const uint8_t MODE_LED_R[6] = {  0,   0,  80, 255, 255, 255 };
-static const uint8_t MODE_LED_G[6] = {  0, 160, 255, 200,  80,   0 };
-static const uint8_t MODE_LED_B[6] = {255, 255,   0,   0,   0,   0 };
-// FWD=blue, 90/10=cyan, 80/20=green, 70/30=yellow, 60/40=orange, 50/50=red
-
-Adafruit_NeoPixel led(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 // -----------------------------
 // DISPLAY + TOUCH CONFIG
@@ -99,6 +79,11 @@ const uint16_t COLOR_GREEN_SEL = 0x07E0;   // selected green
 const uint16_t COLOR_STATUS_RED = 0xF800;
 const uint16_t COLOR_STATUS_GREEN = 0x07E0;
 
+const int RECONNECT_BTN_X = 620;
+const int RECONNECT_BTN_Y = 52;
+const int RECONNECT_BTN_W = 160;
+const int RECONNECT_BTN_H = 36;
+
 struct Button {
   int x;
   int y;
@@ -116,6 +101,7 @@ uint32_t lastWifiAttemptMs = 0;
 uint32_t lastStatusDrawMs = 0;
 wl_status_t lastDrawnWifiStatus = WL_IDLE_STATUS;
 wl_status_t lastHandledWifiStatus = WL_IDLE_STATUS;
+wl_status_t lastDrawnReconnectStatus = WL_IDLE_STATUS;
 
 // Touch smoothing and anti-jitter state
 float filtX = 0;
@@ -199,6 +185,26 @@ void drawApiResult() {
   gfx->print(lastApiResult);
 }
 
+void drawReconnectButton(bool force = false) {
+  wl_status_t status = WiFi.status();
+  if (!force && status == lastDrawnReconnectStatus) {
+    return;
+  }
+  lastDrawnReconnectStatus = status;
+
+  uint16_t fill = (status == WL_CONNECTED) ? COLOR_GREEN_SEL : COLOR_RED_THEME;
+  uint16_t border = (status == WL_CONNECTED) ? COLOR_GREEN_SEL : COLOR_RED_BORDER;
+  const char *label = (status == WL_CONNECTED) ? "Connected" : "Reconnect";
+
+  gfx->fillRoundRect(RECONNECT_BTN_X, RECONNECT_BTN_Y, RECONNECT_BTN_W, RECONNECT_BTN_H, 10, fill);
+  gfx->drawRoundRect(RECONNECT_BTN_X, RECONNECT_BTN_Y, RECONNECT_BTN_W, RECONNECT_BTN_H, 10, border);
+
+  gfx->setTextColor(COLOR_TEXT);
+  gfx->setTextSize(2);
+  gfx->setCursor(RECONNECT_BTN_X + ((status == WL_CONNECTED) ? 18 : 22), RECONNECT_BTN_Y + 10);
+  gfx->print(label);
+}
+
 void drawButton(int i) {
   uint16_t fill = (i == selectedButton) ? COLOR_GREEN_SEL : COLOR_RED_THEME;
   uint16_t border = (i == selectedButton) ? COLOR_GREEN_SEL : COLOR_RED_BORDER;
@@ -219,6 +225,7 @@ void drawAllButtons() {
 void drawUI() {
   gfx->fillScreen(COLOR_BG);
   drawHeader();
+  drawReconnectButton(true);
   drawConnectionStatus(true);
   drawAllButtons();
   drawApiResult();
@@ -229,6 +236,13 @@ bool pointInButton(int px, int py, int i) {
           px < (buttons[i].x + buttons[i].w) &&
           py >= buttons[i].y &&
           py < (buttons[i].y + buttons[i].h));
+}
+
+bool pointInReconnectButton(int px, int py) {
+  return (px >= RECONNECT_BTN_X &&
+          px < (RECONNECT_BTN_X + RECONNECT_BTN_W) &&
+          py >= RECONNECT_BTN_Y &&
+          py < (RECONNECT_BTN_Y + RECONNECT_BTN_H));
 }
 
 void mapTouchPoint(int rawX, int rawY, int &x, int &y) {
@@ -333,10 +347,33 @@ static bool postModeName(const char *modeName, int &codeOut, String &respOut) {
   return (code > 0 && code < 400);
 }
 
+bool reconnectWiFiOnDemand(uint32_t timeoutMs, const char *statusText) {
+  if (WiFi.status() == WL_CONNECTED) {
+    return true;
+  }
+
+  lastApiResult = statusText;
+  drawApiResult();
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+
+  uint32_t startMs = millis();
+  while (WiFi.status() != WL_CONNECTED && (millis() - startMs) < timeoutMs) {
+    delay(100);
+  }
+
+  drawConnectionStatus(true);
+  drawReconnectButton(true);
+  return WiFi.status() == WL_CONNECTED;
+}
+
 bool sendModeToHaldex(int modeIndex) {
   if (WiFi.status() != WL_CONNECTED) {
-    lastApiResult = "Not connected, command not sent";
-    return false;
+    if (!reconnectWiFiOnDemand(10000, "Reconnecting Wi-Fi...")) {
+      lastApiResult = "Wi-Fi still offline, command not sent";
+      return false;
+    }
   }
 
   if (modeIndex < 0 || modeIndex >= 6) {
@@ -383,18 +420,15 @@ void handleWiFiStateChange() {
     drawApiResult();
     sendModeToHaldex(selectedButton);
     drawApiResult();
-    updateLed();
+    drawReconnectButton(true);
   }
 }
 
 void connectWiFiNonBlocking() {
-  if (WiFi.status() == WL_CONNECTED) return;
-  uint32_t now = millis();
-  if (now - lastWifiAttemptMs < 10000) return;
+  if (WiFi.status() == WL_CONNECTED || lastWifiAttemptMs != 0) return;
 
-  lastWifiAttemptMs = now;
+  lastWifiAttemptMs = millis();
   WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 }
 
@@ -419,6 +453,16 @@ void handleTouch() {
   lastStableX = x;
   lastStableY = y;
 
+  if (pointInReconnectButton(x, y)) {
+    if (reconnectWiFiOnDemand(10000, "Reconnect requested...")) {
+      lastApiResult = "Wi-Fi reconnected";
+    } else {
+      lastApiResult = "Reconnect failed";
+    }
+    drawApiResult();
+    return;
+  }
+
   int hitButton = -1;
   for (int i = 0; i < 6; i++) {
     if (pointInButton(x, y, i)) {
@@ -442,7 +486,6 @@ void handleTouch() {
     selectedButton = hitButton;
     drawButton(prev);
     drawButton(selectedButton);
-    updateLed();
   }
 
   // Always send when a button is tapped, even if it is already selected.
@@ -450,69 +493,41 @@ void handleTouch() {
   drawApiResult();
 }
 
-// Sets the LED to the current mode colour.
-// While WiFi is not connected the LED pulses dim white so the user can
-// see the device is alive but not yet linked to the controller.
-static bool lastPulseState = false;
-void updateLed() {
-  if (WiFi.status() == WL_CONNECTED) {
-    lastPulseState = false; // reset so a future disconnect restarts the pulse cleanly
-    led.setPixelColor(0, led.Color(
-      MODE_LED_R[selectedButton],
-      MODE_LED_G[selectedButton],
-      MODE_LED_B[selectedButton]
-    ));
-    led.show();
-  } else {
-    // Slow pulse: bright half of the second, off the other half.
-    // Only call led.show() when the pulse state changes to minimise bus traffic.
-    bool pulse = ((millis() / 500) % 2) == 0;
-    if (pulse != lastPulseState) {
-      lastPulseState = pulse;
-      led.setPixelColor(0, pulse ? led.Color(40, 40, 40) : led.Color(0, 0, 0));
-      led.show();
-    }
-  }
-}
-
 void setup() {
   Serial.begin(115200);
   delay(250);
-
-  led.begin();
-  led.setBrightness(LED_BRIGHTNESS);
-  led.clear();
-  led.show();
+  Serial.println("[BOOT] setup start");
 
   pinMode(TFT_BL, OUTPUT);
   digitalWrite(TFT_BL, HIGH);
+  Serial.println("[BOOT] backlight on");
 
   if (!gfx->begin()) {
     Serial.println("Display init failed");
     while (1) {}
   }
+  Serial.println("[BOOT] display init ok");
 
   Wire.begin(TOUCH_SDA, TOUCH_SCL);
   ts.begin();
   ts.setRotation(ROTATION_NORMAL);
+  Serial.println("[BOOT] touch ready");
 
   initButtons();
   drawUI();
+  Serial.println("[BOOT] initial UI drawn");
 
-  WiFi.setAutoReconnect(true);
+  WiFi.setAutoReconnect(false);
   WiFi.persistent(false);
   connectWiFiNonBlocking();
+  Serial.println("[BOOT] setup complete");
 }
 
 void loop() {
   connectWiFiNonBlocking();
   drawConnectionStatus();
+  drawReconnectButton();
   handleWiFiStateChange();
   handleTouch();
-  // Drive the connecting-pulse when not yet linked; the pulse guard inside
-  // updateLed() ensures led.show() is only called on state transitions.
-  if (WiFi.status() != WL_CONNECTED) {
-    updateLed();
-  }
   delay(5);
 }

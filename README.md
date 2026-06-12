@@ -51,6 +51,21 @@ And displays returned controller mode / effective mode.
 3. Ensure PSRAM is enabled if required by your board.
 4. Compile and upload.
 
+### Arduino IDE tool settings (important)
+If these settings are wrong, the display can stay black and reboot with framebuffer memory errors.
+
+Recommended for Waveshare ESP32-S3 4.3 RGB boards:
+- **Board**: your exact Waveshare ESP32-S3 profile (or `ESP32S3 Dev Module` if needed)
+- **PSRAM**: `OPI PSRAM` (or `Enabled`)
+- **Flash Size**: match your board (commonly `16MB`)
+- **Partition Scheme**: `Huge APP` (or another large app partition)
+
+If Serial Monitor shows errors like:
+- `lcd_rgb_panel_alloc_frame_buffers ... no mem for frame buffer`
+- `ESP_ERR_NO_MEM`
+
+then the fix is almost always correcting **Board** and **PSRAM** in Arduino IDE Tools.
+
 ## Known behavior
 - Button presses only affect drivetrain mode when connected to OpenHaldex-S3 Wi-Fi.
 - UI still updates locally if Wi-Fi is unavailable, but controller command will fail.
