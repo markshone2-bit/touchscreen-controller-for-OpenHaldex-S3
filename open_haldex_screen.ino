@@ -84,6 +84,15 @@ const int RECONNECT_BTN_Y = 52;
 const int RECONNECT_BTN_W = 160;
 const int RECONNECT_BTN_H = 36;
 
+// SavvyCAN analyzer toggle button (below reconnect)
+const int SAVVY_BTN_X = 620;
+const int SAVVY_BTN_Y = 96;   // just below reconnect button
+const int SAVVY_BTN_W = 160;
+const int SAVVY_BTN_H = 36;
+const char *ANALYZER_API_URL = "http://192.168.4.1/api/analyzer";
+bool analyzerActive = false;          // local mirror of controller state
+bool lastDrawnAnalyzerState = false;  // redraw guard
+
 struct Button {
   int x;
   int y;
@@ -185,6 +194,21 @@ void drawApiResult() {
   gfx->print(lastApiResult);
 }
 
+void drawSavvyButton(bool force = false) {
+  if (!force && analyzerActive == lastDrawnAnalyzerState) return;
+  lastDrawnAnalyzerState = analyzerActive;
+
+  uint16_t fill   = analyzerActive ? 0xFD20 : 0x3186;   // orange = active, dark blue = idle
+  uint16_t border = analyzerActive ? 0xFD20 : 0x001F;
+
+  gfx->fillRoundRect(SAVVY_BTN_X, SAVVY_BTN_Y, SAVVY_BTN_W, SAVVY_BTN_H, 10, fill);
+  gfx->drawRoundRect(SAVVY_BTN_X, SAVVY_BTN_Y, SAVVY_BTN_W, SAVVY_BTN_H, 10, border);
+  gfx->setTextColor(COLOR_TEXT);
+  gfx->setTextSize(2);
+  gfx->setCursor(SAVVY_BTN_X + 8, SAVVY_BTN_Y + 10);
+  gfx->print(analyzerActive ? "SavvyCAN ON" : "SavvyCAN");
+}
+
 void drawReconnectButton(bool force = false) {
   wl_status_t status = WiFi.status();
   if (!force && status == lastDrawnReconnectStatus) {
@@ -226,6 +250,7 @@ void drawUI() {
   gfx->fillScreen(COLOR_BG);
   drawHeader();
   drawReconnectButton(true);
+  drawSavvyButton(true);
   drawConnectionStatus(true);
   drawAllButtons();
   drawApiResult();
@@ -243,6 +268,40 @@ bool pointInReconnectButton(int px, int py) {
           px < (RECONNECT_BTN_X + RECONNECT_BTN_W) &&
           py >= RECONNECT_BTN_Y &&
           py < (RECONNECT_BTN_Y + RECONNECT_BTN_H));
+}
+
+bool pointInSavvyButton(int px, int py) {
+  return (px >= SAVVY_BTN_X &&
+          px < (SAVVY_BTN_X + SAVVY_BTN_W) &&
+          py >= SAVVY_BTN_Y &&
+          py < (SAVVY_BTN_Y + SAVVY_BTN_H));
+}
+
+void toggleAnalyzerMode() {
+  if (WiFi.status() != WL_CONNECTED) {
+    lastApiResult = "Not connected - can't toggle SavvyCAN";
+    return;
+  }
+
+  bool requestOn = !analyzerActive;
+
+  HTTPClient http;
+  http.setTimeout(2000);
+  http.begin(ANALYZER_API_URL);
+  http.addHeader("Content-Type", "application/json");
+
+  String body = requestOn ? "{\"enabled\":true}" : "{\"enabled\":false}";
+  int code = http.POST(body);
+  String resp = http.getString();
+  http.end();
+
+  if (code > 0 && code < 400) {
+    analyzerActive = requestOn;
+    lastApiResult = analyzerActive ? "SavvyCAN ON - connect port 23" : "SavvyCAN OFF";
+    drawSavvyButton(true);
+  } else {
+    lastApiResult = "SavvyCAN toggle failed: " + String(code);
+  }
 }
 
 void mapTouchPoint(int rawX, int rawY, int &x, int &y) {
@@ -463,6 +522,12 @@ void handleTouch() {
     return;
   }
 
+  if (pointInSavvyButton(x, y)) {
+    toggleAnalyzerMode();
+    drawApiResult();
+    return;
+  }
+
   int hitButton = -1;
   for (int i = 0; i < 6; i++) {
     if (pointInButton(x, y, i)) {
@@ -527,6 +592,7 @@ void loop() {
   connectWiFiNonBlocking();
   drawConnectionStatus();
   drawReconnectButton();
+  drawSavvyButton();
   handleWiFiStateChange();
   handleTouch();
   delay(5);
