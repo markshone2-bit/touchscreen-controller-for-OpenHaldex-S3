@@ -8,6 +8,7 @@ This project provides:
 - API mode switching over HTTP (`/api/mode`)
 - On-screen confirmation from status endpoint (`/api/status` for S3, `/api/dashboard` for C6)
 - Visual match with browser UI behavior
+- RGB mode-status LED support (NeoPixel / WS2812)
 
 ## Release note (June 2026)
 - Added separate sketch support for both OpenHaldex-S3 and OpenHaldex-C6.
@@ -44,11 +45,15 @@ Controller-specific behavior:
 - Waveshare ESP32-S3 Touch LCD 4.3B (or pin-compatible setup)
 - OpenHaldex-S3 or OpenHaldex-C6 unit
 - Stable 5V power supply (recommended for car use)
+- 1x WS2812/NeoPixel 5V LED (e.g. [Adafruit NeoPixel breakout](https://www.adafruit.com/product/1938) or [single WS2812B LED module examples](https://www.amazon.co.uk/s?k=ws2812b+led+module))
+- 1x 330–470Ω resistor for the LED data line (recommended, e.g. [resistor kit](https://www.amazon.co.uk/s?k=330+ohm+resistor+kit))
+- Hook-up wire and ground/power connection from the controller to the LED
 
 ## Arduino libraries
 Install in Arduino IDE Library Manager:
 - Arduino_GFX_Library
 - TAMC_GT911
+- Adafruit NeoPixel
 
 ## Sketch
 Available sketches:
@@ -67,6 +72,20 @@ C6 sketch (`open_haldex_c6_screen.ino`):
 - Host: `192.168.1.1`
 - `POST /api/mode` with numeric mode JSON such as `{ "mode": 2 }`
 - Polls `GET /api/dashboard`
+
+## RGB LED behavior
+- Default configuration in `open_haldex_screen.ino`:
+  - `LED_PIN = 4`
+  - `LED_COUNT = 1`
+  - `LED_BRIGHTNESS = 180`
+- While connected to OpenHaldex-S3 Wi-Fi, LED color follows selected mode:
+  - FWD = blue
+  - 90/10 = cyan
+  - 80/20 = green
+  - 70/30 = yellow
+  - 60/40 = orange
+  - 50/50 = red
+- While not connected to Wi-Fi, LED pulses dim white to show the unit is powered but not linked.
 
 ## Build and upload
 1. Open the correct sketch for your controller in Arduino IDE.
