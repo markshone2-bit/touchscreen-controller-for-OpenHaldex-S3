@@ -1,13 +1,22 @@
 # OpenHaldex S3 Touch Controller (ESP32-S3 4.3 inch)
 
-In-car touchscreen controller for OpenHaldex-S3 using a Waveshare ESP32-S3 4.3 inch RGB display.
+In-car touchscreen controller for OpenHaldex-S3 and OpenHaldex-C6 using a Waveshare ESP32-S3 4.3 inch RGB display.
 
 This project provides:
 - Touch buttons for torque split presets
-- Wi-Fi connection to OpenHaldex-S3 AP (`OpenHaldex-S3`)
+- Wi-Fi connection to OpenHaldex AP (S3 or C6)
 - API mode switching over HTTP (`/api/mode`)
-- On-screen confirmation from `/api/status`
+- On-screen confirmation from status endpoint (`/api/status` for S3, `/api/dashboard` for C6)
 - Visual match with browser UI behavior
+
+## Two sketch versions
+Use the version that matches your controller firmware:
+- `open_haldex_screen.ino` for OpenHaldex-S3 (original stable S3 sketch)
+- `open_haldex_c6_screen.ino` for OpenHaldex-C6 (Forbes Automotive)
+
+Controller-specific behavior:
+- S3 version: SSID `OpenHaldex-S3`, IP `192.168.4.1`, status endpoint `/api/status`, string mode payloads
+- C6 version: SSID `OpenHaldex-C6`, IP `192.168.1.1`, status endpoint `/api/dashboard`, numeric mode payloads (`0..5`)
 
 ## Current mode presets
 - STOCK (FWD)
@@ -19,7 +28,7 @@ This project provides:
 
 ## Hardware
 - Waveshare ESP32-S3 Touch LCD 4.3B (or pin-compatible setup)
-- OpenHaldex-S3 unit
+- OpenHaldex-S3 or OpenHaldex-C6 unit
 - Stable 5V power supply (recommended for car use)
 
 ## Arduino libraries
@@ -28,25 +37,25 @@ Install in Arduino IDE Library Manager:
 - TAMC_GT911
 
 ## Sketch
-Main sketch:
-- `open_haldex_screen.ino`
+Available sketches:
+- `open_haldex_screen.ino` (S3)
+- `open_haldex_c6_screen.ino` (C6)
 
 ## Wi-Fi and API details
-The sketch is configured to connect to:
+S3 sketch (`open_haldex_screen.ino`):
 - SSID: `OpenHaldex-S3`
 - Host: `192.168.4.1`
+- `POST /api/mode` with JSON body such as `{ "mode": "9010" }`
+- Polls `GET /api/status`
 
-Mode commands are sent as:
-- `POST /api/mode`
-- JSON body: `{ "mode": "9010" }` (example)
-
-After each command, the sketch polls:
-- `GET /api/status`
-
-And displays returned controller mode / effective mode.
+C6 sketch (`open_haldex_c6_screen.ino`):
+- SSID: `OpenHaldex-C6`
+- Host: `192.168.1.1`
+- `POST /api/mode` with numeric mode JSON such as `{ "mode": 2 }`
+- Polls `GET /api/dashboard`
 
 ## Build and upload
-1. Open `open_haldex_screen.ino` in Arduino IDE.
+1. Open the correct sketch for your controller in Arduino IDE.
 2. Select your ESP32-S3 board profile.
 3. Ensure PSRAM is enabled if required by your board.
 4. Compile and upload.
@@ -67,7 +76,7 @@ If Serial Monitor shows errors like:
 then the fix is almost always correcting **Board** and **PSRAM** in Arduino IDE Tools.
 
 ## Known behavior
-- Button presses only affect drivetrain mode when connected to OpenHaldex-S3 Wi-Fi.
+- Button presses only affect drivetrain mode when connected to the matching OpenHaldex Wi-Fi.
 - UI still updates locally if Wi-Fi is unavailable, but controller command will fail.
 
 ## Safety notice
