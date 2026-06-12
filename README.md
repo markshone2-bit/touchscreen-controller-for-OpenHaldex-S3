@@ -9,6 +9,20 @@ This project provides:
 - On-screen confirmation from status endpoint (`/api/status` for S3, `/api/dashboard` for C6)
 - Visual match with browser UI behavior
 
+## Release note (June 2026)
+- Added separate sketch support for both OpenHaldex-S3 and OpenHaldex-C6.
+- Existing S3 sketch remains unchanged for users already running it in-car.
+
+## Quick S3 vs C6
+| Item | OpenHaldex-S3 | OpenHaldex-C6 (Forbes Automotive) |
+| --- | --- | --- |
+| Sketch file | `open_haldex_screen.ino` | `open_haldex_c6_screen.ino` |
+| Wi-Fi SSID | `OpenHaldex-S3` | `OpenHaldex-C6` |
+| Host IP | `192.168.4.1` | `192.168.1.1` |
+| Mode endpoint | `POST /api/mode` | `POST /api/mode` |
+| Mode payload | `{ "mode": "9010" }` (string) | `{ "mode": 2 }` (numeric 0..5) |
+| Status endpoint | `GET /api/status` | `GET /api/dashboard` |
+
 ## Two sketch versions
 Use the version that matches your controller firmware:
 - `open_haldex_screen.ino` for OpenHaldex-S3 (original stable S3 sketch)
