@@ -473,7 +473,6 @@ void handleWiFiStateChange() {
   }
 
   lastHandledWifiStatus = status;
-
   if (status == WL_CONNECTED) {
     lastApiResult = "Connected, syncing " + String(buttons[selectedButton].label);
     drawApiResult();

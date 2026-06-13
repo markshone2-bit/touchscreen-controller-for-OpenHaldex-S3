@@ -49,6 +49,7 @@ Controller-specific behavior:
 Install in Arduino IDE Library Manager:
 - Arduino_GFX_Library
 - TAMC_GT911
+- Adafruit NeoPixel
 
 ## Sketch
 Available sketches:
